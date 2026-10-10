@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from Minesweeper import Minesweeper
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from ai import AISolver
 
 app = FastAPI()
@@ -40,6 +41,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+# This makes the frontend static so that the mp3 files can be accessed.
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
 game = None
 ai_solver = None

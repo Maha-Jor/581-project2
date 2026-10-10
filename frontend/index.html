@@ -217,9 +217,10 @@ Added features for AI display updates, added features to gain settings for AI, a
 </style>
 
 <script>
-function playclicksound() {
-	document.getElementById("click_sound").play();
-}
+// function playclicksound() {
+// 	var audio = document.getElementById("click_sound");
+// 	audio.play();
+// }
 
 var cur_state;
 var ai_enabled = false;
@@ -251,6 +252,8 @@ function updateMineCount(count) {
 function updateTimerDisplay(){
     const seconds = Math.floor((Date.now() - startTime) / 1000);
     document.getElementById("timer").textContent = `Time: ${seconds}s`;
+    const audio = new Audio("/frontend/sounds/tick.mp3");
+    audio.play();
 }
 
 //starts the timer if it hasn't been started, offset by the server's elapsed time
@@ -553,6 +556,9 @@ function generateTable() {
                 if(aiEnabled && isAiTurn && interactiveMode){
                     triggerAiTurn();
                 }else{
+                    // plays a click sound effect on the cells.
+                    const audio = new Audio("/frontend/sounds/clicksoundeffect.mp3");
+                    audio.play();
                     cellClicked(x, y);
                 }
             });
@@ -560,6 +566,8 @@ function generateTable() {
             boardCell.addEventListener("contextmenu", (event) =>{
                 //cancel opening context menu on right click
                 event.preventDefault();
+                const audio = new Audio("/frontend/sounds/clicksoundeffect.mp3");
+                audio.play();
                 cellFlagged(x, y);
             });
 
