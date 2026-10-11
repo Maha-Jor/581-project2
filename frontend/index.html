@@ -15,30 +15,57 @@
 #Creation Date:
 #   September 17, 2026
 -->
+
+
+<!--
+Project 2 Authors:
+Maha Jornaz
+Phoenix Brehm
+Carson Schraad
+Collin Tullis
+
+Last updated - 10/10/26
+
+Added features for AI display updates, added features to gain settings for AI, added a timer display and updates to said timer, and added 5 sound effects for 5 different actions. 
+-->
 <!DOCTYPE html>
 <html>
 <head>
     <title>Minesweeper</title>
 </head>
 <body>
-	
-	<audio id="click_sound" src="sounds/tick.wav"></audio>    
+	<!--
+	<audio id="click_sound" src="sounds/tick.wav"></audio>     //audio for when a user clicks on a cell
 
-	<button onclick="playclicksound()">Test Sound</button>
+	<button onclick="playclicksound()">Test Sound</button>     //button that tests if the click sounds is played correctly
 	
-	<audio id="flag_sound" src="sounds/flag_sound.ogg"></audio>
-	<audio id="mine_sound" src="sounds/lose.wav"></audio>
-	<audio id="win_sound" src="sounds/win.wav"></audio>
-	<audio id="lose_sound" src="sounds/sfx_defeat.ogg"></audio>
-
+	<audio id="flag_sound" src="sounds/flag_sound.ogg"></audio>   //audio for when a user flags a cell
+	<audio id="mine_sound" src="sounds/lose.wav"></audio>      //audio for when a user clicks a mine
+	<audio id="win_sound" src="sounds/win.wav"></audio>       //audio for when a user wins 
+	<audio id="lose_sound" src="sounds/sfx_defeat.ogg"></audio>    //audio for when a user loses
+    -->
     <h1>Minesweeper</h1>
     <form id="setupForm">
 	    <label for ="mineCount">Number of mines:</label>
-	    <input type="number" id="mineCount" min="1" max="20" required>
+	    <input type="number" id="mineCount" min="10" max="20" required>
 	    <button type="submit">Start</button>
     </form>
-
+    <form id="aiMode">
+        <label for ="aiDifficulty">AI Difficulty:</label>
+        <select name ="difficulty" id="aiDifficulty">
+            <option value="off">Off</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+        <label for="interactiveMode">
+            <input type="checkbox" id="interactiveMode">
+            Interactive Mode
+        </label>
+    </form>
     <p id="minesRemaining">Remaining flags: </p>
+    <p id="timer">Time: 0s</p>
+    <p id="turnDisplay" style="display: none">Player's Turn</p>
 
     <!-- Stores Game -->
     <div id="boardDiv"></div>
@@ -55,6 +82,40 @@
 #minesRemaining{
   text-align: center;
   display: none;
+
+  font-family: monospace;
+  font-size: 24px;
+  font-weight: bold;
+
+  margin: 15px auto;
+  padding: 8px 20px;
+
+  width: fit-content;
+
+  background-color: lightgrey;
+  border: 5px outset grey;
+}
+
+#timer{
+  text-align: center;
+  display: block;
+
+  font-family: monospace;
+  font-size: 24px;
+  font-weight: bold;
+
+  margin: 15px auto;
+  padding: 8px 20px;
+
+  width: fit-content;
+
+  background-color: lightgrey;
+  border: 5px outset grey;
+}
+
+#turnDisplay{
+  text-align: center;
+  display: block;
 
   font-family: monospace;
   font-size: 24px;
@@ -156,11 +217,18 @@
 </style>
 
 <script>
-	function playclicksound() {
-		document.getElementById("click_sound").play();
-	}
+function playclicksound() {
+	document.getElementById("click_sound").play();
+}
 
 var cur_state;
+var ai_enabled = false;
+var interactiveMode = false;
+var isAiTurn = false;
+//Timer stuff
+var timerInterval = null;
+var startTime = null;
+var gameId = 0; // bumped on every new game so stale responses can be ignored
 
 const colors = [
     null,
@@ -179,6 +247,43 @@ function updateMineCount(count) {
   document.getElementById("minesRemaining").textContent = `Remaining flags: ${count}`;
 }
 
+//Gets the new current time
+function updateTimerDisplay(){
+    const seconds = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById("timer").textContent = `Time: ${seconds}s`;
+    const audio = new Audio("/frontend/sounds/tick.mp3");
+    audio.play();
+}
+
+//starts the timer if it hasn't been started, offset by the server's elapsed time
+function startTimer(serverElapsed = 0){
+    if (timerInterval !== null){
+        return;
+    }
+    startTime = Date.now() - serverElapsed * 1000;
+    updateTimerDisplay();
+    timerInterval = setInterval(updateTimerDisplay, 1000);
+}
+
+//stops the timer when called
+function stopTimer(serverElapsed){
+    if(timerInterval !== null){
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    if(typeof serverElapsed === "number"){
+        document.getElementById("timer").textContent = `Time: ${Math.floor(serverElapsed)}s`;
+    } else if (startTime !== null){
+        updateTimerDisplay();
+    }
+}
+
+//resets the timer
+function resetTimer(){
+    stopTimer();
+    startTime = null;
+    document.getElementById("timer").textContent = 'Time: 0s';
+}
 
 // Trey - 09/18/26
 // function that is performed upon left click, it takes the x and y coordinates of the cell clicked
@@ -187,10 +292,10 @@ function cellClicked(x, y){
 	console.log(`clicked ${x}, ${y}`);
 	document.getElementById("click_sound").play();    //Maha's code
 	
-	if (cur_state != 2){
+	if (cur_state != 2 || (aiEnabled && !interactiveMode) || (aiEnabled && isAiTurn)){
         	return;
 	}
-
+	const myGame = gameId; // remember which game this click belongs to
 	// create the post request to the /board endpoint
 	fetch("/board", {
 		method: "POST",
@@ -202,18 +307,37 @@ function cellClicked(x, y){
 			y: y
 		})
 	})
-		.then(response => response.json()) // recieve the json response
+		.then(response => {
+			if (!response.ok) throw new Error(`/board returned ${response.status}`);
+			return response.json(); // recieve the json response
+		})
 		.then(data => {
+            if(myGame != gameId) return;
 			console.log(data);
 			populateTable(data.board); // take the given board data and pass it to populateTable
 			cur_state = data.result; // assigns the result of the game to cur_state
+            startTimer(data.elapsed);
+            updateTurnDisplay(data.turn);
+            isAiTurn = (data.turn === "ai");
 			if (cur_state == 1) { // if it is 1
+                stopTimer(data.elapsed); //stops the timer when the game ends
 				showWinScreen(); // then the game is won, display corresponding screen
 			}
 			else if (cur_state == 0) { // if it is 0
+                stopTimer(data.elapsed); //stops the timer when the game ends
 				showLossScreen(); // then the is lost, display corresponding screen
-			}
-		});
+			}else if(aiEnabled && isAiTurn){
+                if(interactiveMode){
+
+                }else{
+                    setTimeout(triggerAiTurn, 500)
+                }
+            }
+		})
+        .catch(err => {
+			console.error(err);
+			if (myGame === gameId) stopTimer(); // don't leave a timer running on a failed request;
+        });
 }
 
 // Trey - 09/18/26
@@ -222,7 +346,7 @@ function cellClicked(x, y){
 function cellFlagged(x, y){
     console.log(`flagged ${x}, ${y}`);
     document.getElementById("flag_sound").play();   //Maha's code
-    if (cur_state != 2){
+    if (cur_state != 2 || (aiEnabled && isAiTurn)){
         return;
     }
 	// create the post request to the /flag endpoint
@@ -247,9 +371,45 @@ function cellFlagged(x, y){
 		.then(data => { 
       populateTable(data.board); // takes the given board data and populates the table with it
       updateMineCount(data.mines); // takes the given mine data and updates the mine count with it
+      updateTurnDisplay(data.turn);
+      isAiTurn = (data.turn === "ai");
+      if(aiEnabled && isAiTurn){
+        if(interactiveMode){
+
+        }else{
+            setTimeout(triggerAiTurn, 500)
+        }
+      }
     }).catch(error => {console.log(error)});
 }
 
+//function which starts the turn for the AI and visually updates accordingly.
+function triggerAiTurn(){
+    if (cur_state != 2){
+        return;
+    }
+    fetch("/ai-turn", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"}
+    })
+    .then(response => response.json())
+    .then(data => {
+        populateTable(data.board);
+        cur_state = data.result;
+        updateMineCount(data.mines);
+        updateTurnDisplay(data.turn);
+        isAiTurn = (data.turn === "ai");
+        if (cur_state == 1){
+            stopTimer(data.elapsed);
+            showWinScreen();
+        }else if(cur_state == 0){
+            stopTimer(data.elapsed);
+            showLossScreen();
+        }else if(aiEnabled && isAiTurn && !interactiveMode){
+            setTimeout(triggerAiTurn, 500);
+        }
+    });
+}
 
 // Jack Larson
 // 9/17/26
@@ -368,7 +528,7 @@ function generateTable() {
 
     //add header for column labels
     const headerRow = document.createElement("tr");
-     headerRow.innerHTML = '<th></th>';
+    headerRow.innerHTML = '<th></th>';
 
     //Iterate for each letter and add to top row
     for (let i = 0; i < 10; i++){
@@ -399,14 +559,24 @@ function generateTable() {
             
             //add listener for left click and call function with given position
             boardCell.addEventListener("click", (event) =>{
-		if (event.button !== 0) return;
-                cellClicked(x, y);
+                if(aiEnabled && !interactiveMode){
+                    return;
+                }
+                if(aiEnabled && isAiTurn && interactiveMode){
+                    triggerAiTurn();
+                }else{
+                    // plays a click sound effect on the cells.
+                    const audio = new Audio("/frontend/sounds/clicksoundeffect.mp3");
+                    audio.play();
+                    cellClicked(x, y);
+                }
             });
             //add listener for right click and call function with given position
             boardCell.addEventListener("contextmenu", (event) =>{
                 //cancel opening context menu on right click
                 event.preventDefault();
-		event.stopPropagation();   //Maha's code
+                const audio = new Audio("/frontend/sounds/clicksoundeffect.mp3");
+                audio.play();
                 cellFlagged(x, y);
             });
 
@@ -430,8 +600,16 @@ document.getElementById("setupForm").addEventListener("submit", function(event) 
 	
 	// sets the number of mines to be in the game board
 	const mines = Number(document.getElementById("mineCount").value);
+    // sets difficulty
+    const difficulty = document.getElementById("aiDifficulty").value;
+    interactiveMode = document.getElementById("interactiveMode").checked;
+    aiEnabled = (difficulty !== "off");
+    isAiTurn = false;
+
 	//Update the mine count once the game is started
 	updateMineCount(mines);
+    gameId++;
+    resetTimer(); //resets the timer on a new game
 	//Set the text box to display the correct number of mines
 	document.getElementById("minesRemaining").style.display = "block";
 	
@@ -442,12 +620,53 @@ document.getElementById("setupForm").addEventListener("submit", function(event) 
 			"Content-Type": "application/json"
 		},
 		body: JSON.stringify({
-			n: mines
+			n: mines,
+            difficulty: difficulty,
+            interactive: interactiveMode
 		})
 	})
-		.then(generateTable); // after setup completes generate a new board for the game
+		.then(() => {
+            generateTable(); // after setup completes generate a new board for the game
+            if(aiEnabled && !interactiveMode){
+                isAiTurn = true;
+                updateTurnDisplay("ai");
+                startTimer();
+                setTimeout(triggerAiTurn, 500);
+            }else{
+                updateTurnDisplay("player");
+            }
+        });
 	document.getElementById("minesRemaining").style.display = "block";
 	cur_state = 2;
 });
 
+//listens for the updates of AI difficulty, disabling the interactive button if ai is off.
+const aiDifficulty = document.getElementById("aiDifficulty");
+const interactive = document.getElementById("interactiveMode");
+aiDifficulty.addEventListener("change", function(){
+    if(aiDifficulty.value === "off"){
+        interactive.checked = false;
+        interactive.disabled = true;
+    }
+    else{
+        interactive.disabled = false;
+    }
+});
+
+//updates the turn display showing either, players turn when ai is on and interactive, ai's turn with instructions when in interactice mode, and just ai's turn when not interactive.
+function updateTurnDisplay(turn){
+    turndisplay = document.getElementById("turnDisplay");
+    if(aiDifficulty.value === "off"){
+        turndisplay.style.display = "none";
+        return;
+    }
+    turndisplay.style.display = "block";
+    if(turn === "player"){
+        turndisplay.textContent = "Player's Turn";
+    }else if(turn === "ai" && interactive.checked){
+        turndisplay.textContent = "AI's Turn (Click to Proceed)";
+    }else if(turn === "ai" && !interactive.checked){
+        turndisplay.textContent = "AI's Turn"
+    }
+}
 </script>
