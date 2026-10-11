@@ -26,7 +26,7 @@ Collin Tullis
 
 Last updated - 10/10/26
 
-Added features for AI display updates, added features to gain settings for AI, and added a timer display and updates to said timer
+Added features for AI display updates, added features to gain settings for AI, added a timer display and updates to said timer, and added 5 sound effects for 5 different actions. 
 -->
 <!DOCTYPE html>
 <html>
@@ -35,14 +35,14 @@ Added features for AI display updates, added features to gain settings for AI, a
 </head>
 <body>
 	<!--
-	<audio id="click_sound" src="sounds/tick.wav"></audio>    
+	<audio id="click_sound" src="sounds/tick.wav"></audio>     //audio for when a user clicks on a cell
 
-	<button onclick="playclicksound()">Test Sound</button>
+	<button onclick="playclicksound()">Test Sound</button>     //button that tests if the click sounds is played correctly
 	
-	<audio id="flag_sound" src="sounds/flag_sound.ogg"></audio>
-	<audio id="mine_sound" src="sounds/lose.wav"></audio>
-	<audio id="win_sound" src="sounds/win.wav"></audio>
-	<audio id="lose_sound" src="sounds/sfx_defeat.ogg"></audio>
+	<audio id="flag_sound" src="sounds/flag_sound.ogg"></audio>   //audio for when a user flags a cell
+	<audio id="mine_sound" src="sounds/lose.wav"></audio>      //audio for when a user clicks a mine
+	<audio id="win_sound" src="sounds/win.wav"></audio>       //audio for when a user wins 
+	<audio id="lose_sound" src="sounds/sfx_defeat.ogg"></audio>    //audio for when a user loses
     -->
     <h1>Minesweeper</h1>
     <form id="setupForm">
@@ -218,7 +218,7 @@ Added features for AI display updates, added features to gain settings for AI, a
 
 <script>
 // function playclicksound() {
-// 	var audio = document.getElementById("click_sound");
+// 	var audio = document.getElementById("click_sound");   //when the user clicks a cell a sound plays
 // 	audio.play();
 // }
 
